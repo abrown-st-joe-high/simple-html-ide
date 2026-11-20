@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTML Practice IDE</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Courier New", Courier, monospace; background: #f4f4f4; color: #222; }
+  header { padding: 10px 14px; background: #222; color: #fff; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0 auto 0 0; }
+  button { font-family: "Courier New", Courier, monospace; font-size: 14px; padding: 6px 12px; cursor: pointer; border: 1px solid #888; background: #fff; border-radius: 3px; }
+  button:hover { background: #e8e8e8; }
+  main { display: flex; gap: 10px; padding: 10px; height: calc(100vh - 190px); min-height: 300px; }
+  .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .label { font-size: 12px; margin-bottom: 4px; color: #555; }
+  .editor { position: relative; flex: 1; background: #fff; border: 1px solid #999; overflow: hidden; }
+  .editor pre, .editor textarea {
+    position: absolute; inset: 0; margin: 0; padding: 10px 10px 10px 56px; border: 0;
+    font-family: "Courier New", Courier, monospace; font-size: 14px; line-height: 20px;
+    white-space: pre; tab-size: 2; overflow: auto; width: 100%; height: 100%;
+  }
+  .editor pre#gutter { width: 44px; padding: 10px 6px 10px 0; text-align: right; color: #999; background: #f0f0f0; border-right: 1px solid #ccc; z-index: 2; }
+  .editor pre#hl { pointer-events: none; color: #222; overflow: hidden; }
+  .editor pre#gutter { overflow: hidden; pointer-events: none; }
+  dialog { font-family: "Courier New", Courier, monospace; border: 1px solid #888; border-radius: 4px; padding: 16px; }
+  dialog input { font-family: inherit; font-size: 14px; padding: 5px; width: 200px; }
+  dialog p { margin: 0 0 10px; }
+  .editor textarea { background: transparent; color: transparent; caret-color: #000; resize: none; outline: none; }
+  .editor textarea::selection { background: rgba(60,120,220,.3); }
+  iframe { flex: 1; border: 1px solid #999; background: #fff; width: 100%; }
+  #result { margin: 0 10px 10px; padding: 10px; background: #fff; border: 1px solid #999; height: 110px; overflow: auto; font-size: 14px; }
+  .ok { color: #0a7a2f; } .err { color: #b3261e; }
+  .t { color: #0b5cad; } .a { color: #9a5b00; } .s { color: #1a7f37; } .c { color: #888; font-style: italic; }
+  @media (max-width: 700px) { main { flex-direction: column; height: auto; } .pane { height: 300px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>HTML Practice IDE</h1>
+  <button id="check">Check Tags</button>
+  <button id="run">Run</button>
+  <button id="clear">Clear</button>
+</header>
+<main>
+  <div class="pane">
+    <div class="label">Your code (not saved: refreshing the page clears it)</div>
+    <div class="editor">
+      <pre id="gutter" aria-hidden="true"></pre>
+      <pre id="hl" aria-hidden="true"></pre>
+      <textarea id="code" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+    </div>
+  </div>
+  <div class="pane">
+    <div class="label">Preview</div>
+    <iframe id="out" sandbox="allow-scripts" title="Preview"></iframe>
+  </div>
+</main>
+<dialog id="pw">
+  <p>Enter the password to use Run:</p>
+  <input type="password" id="pwInput" autocomplete="off">
+  <p id="pwMsg" class="err" style="margin:8px 0 0"></p>
+  <p style="margin:12px 0 0"><button id="pwOk">OK</button> <button id="pwCancel">Cancel</button></p>
+</dialog>
+<div id="result">Press "Check Tags" to check your code.</div>
+
+<script>
+const code = document.getElementById('code');
+const hl = document.getElementById('hl');
+const out = document.getElementById('out');
+const gutter = document.getElementById('gutter');
+const result = document.getElementById('result');
+
+code.value = '';
+
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function highlight(src) {
+  const re = /(<!--[\s\S]*?(?:-->|$))|(<\/?[a-zA-Z!][^>]*>?)/g;
+  let last = 0, html = '', m;
+  while ((m = re.exec(src))) {
+    html += esc(src.slice(last, m.index));
+    if (m[1]) {
+      html += '<span class="c">' + esc(m[1]) + '</span>';
+    } else {
+      const parts = /^(<\/?!?)([\w:-]*)([\s\S]*?)(\/?>?)$/.exec(m[2]);
+      let attrs = esc(parts[3]).replace(/([\w:-]+)(\s*=\s*)?("[^"]*"|'[^']*')?/g, (x, n, eq, v) =>
+        '<span class="a">' + n + '</span>' + (eq || '') + (v ? '<span class="s">' + v + '</span>' : ''));
+      html += '<span class="t">' + esc(parts[1]) + parts[2] + '</span>' + attrs + '<span class="t">' + esc(parts[4]) + '</span>';
+    }
+    last = re.lastIndex;
+  }
+  html += esc(src.slice(last));
+  return html + '\n';
+}
+
+function render() {
+  hl.innerHTML = highlight(code.value);
+  const n = code.value.split('\n').length;
+  let nums = '';
+  for (let i = 1; i <= n; i++) nums += i + '\n';
+  gutter.textContent = nums;
+  sync();
+}
+function sync() {
+  hl.scrollTop = gutter.scrollTop = code.scrollTop;
+  hl.scrollLeft = code.scrollLeft;
+}
+code.addEventListener('input', render);
+code.addEventListener('scroll', sync);
+code.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = code.selectionStart;
+    code.value = code.value.slice(0, s) + '  ' + code.value.slice(code.selectionEnd);
+    code.selectionStart = code.selectionEnd = s + 2;
+    render();
+  }
+});
+
+// Tags that never take a closing tag
+const VOID = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
+
+function checkTags(src) {
+  const problems = [];
+  const stack = [];
+  const lineAt = i => src.slice(0, i).split('\n').length;
+  const re = /<!--[\s\S]*?-->|<!doctype[^>]*>|<(\/?)([a-zA-Z][\w:-]*)((?:"[^"]*"|'[^']*'|[^'">])*)>/gi;
+  let m;
+  while ((m = re.exec(src))) {
+    if (!m[2]) continue; // comment or doctype
+    const name = m[2].toLowerCase();
+    const line = lineAt(m.index);
+    if (m[1]) {
+      if (VOID.has(name)) { problems.push('Line ' + line + ': <' + name + '> does not use a closing tag.'); continue; }
+      if (!stack.length) { problems.push('Line ' + line + ': </' + name + '> has no matching opening tag.'); continue; }
+      const top = stack[stack.length - 1];
+      if (top.name === name) { stack.pop(); continue; }
+      const idx = stack.map(t => t.name).lastIndexOf(name);
+      if (idx === -1) {
+        problems.push('Line ' + line + ': </' + name + '> has no matching opening tag.');
+      } else {
+        while (stack.length - 1 > idx) {
+          const t = stack.pop();
+          problems.push('Line ' + t.line + ': <' + t.name + '> is never closed (found </' + name + '> on line ' + line + ' first).');
+        }
+        stack.pop();
+      }
+    } else {
+      if (VOID.has(name) || /\/\s*$/.test(m[3])) continue;
+      stack.push({ name, line });
+      if (name === 'script' || name === 'style') { // skip raw text inside
+        const end = new RegExp('</' + name + '\\s*>', 'i');
+        const rest = src.slice(re.lastIndex);
+        const f = end.exec(rest);
+        if (f) re.lastIndex += f.index; // next match will be the closing tag
+      }
+    }
+  }
+  stack.forEach(t => problems.push('Line ' + t.line + ': <' + t.name + '> is never closed.'));
+  return problems.sort((a, b) => parseInt(a.slice(5)) - parseInt(b.slice(5)));
+}
+
+document.getElementById('check').onclick = () => {
+  const p = checkTags(code.value);
+  if (!code.value.trim()) {
+    result.textContent = 'Nothing to check yet. Type some HTML first.';
+  } else if (!p.length) {
+    result.innerHTML = '<span class="ok">All tags that need a closing tag have one. Nice work!</span>';
+  } else {
+    result.innerHTML = '<span class="err">Found ' + p.length + ' problem' + (p.length > 1 ? 's' : '') + ':</span><br>' +
+      p.map(x => esc(x)).join('<br>');
+  }
+};
+// Password for Run. To change it, replace the text inside atob(...) with
+// your password encoded in base64 (e.g. run btoa('newpassword') in the browser console).
+// Note: this is only a light lock; anyone who views the page source can work it out.
+const PASS = atob('cGx0dw==');
+let unlocked = false; // kept in memory only, so a page refresh asks again
+const pw = document.getElementById('pw');
+const pwInput = document.getElementById('pwInput');
+const pwMsg = document.getElementById('pwMsg');
+function runCode() { out.srcdoc = code.value; }
+document.getElementById('run').onclick = () => {
+  if (unlocked) { runCode(); return; }
+  pwInput.value = ''; pwMsg.textContent = '';
+  pw.showModal(); pwInput.focus();
+};
+function tryPw() {
+  if (pwInput.value === PASS) { unlocked = true; pw.close(); runCode(); }
+  else { pwMsg.textContent = 'Incorrect password.'; pwInput.select(); }
+}
+document.getElementById('pwOk').onclick = tryPw;
+document.getElementById('pwCancel').onclick = () => pw.close();
+pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryPw(); });
+document.getElementById('clear').onclick = () => {
+  if (confirm('Clear all code?')) { code.value = ''; render(); out.srcdoc = ''; result.textContent = 'Press "Check Tags" to check your code.'; }
+};
+
+render();
+</script>
+</body>
+</html>
