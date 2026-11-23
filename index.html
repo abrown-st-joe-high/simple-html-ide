@@ -44,7 +44,7 @@
 </header>
 <main>
   <div class="pane">
-    <div class="label">Your code (not saved: refreshing the page clears it)</div>
+    <div class="label">Your code (autosaved in this browser)</div>
     <div class="editor">
       <pre id="gutter" aria-hidden="true"></pre>
       <pre id="hl" aria-hidden="true"></pre>
@@ -71,7 +71,10 @@ const out = document.getElementById('out');
 const gutter = document.getElementById('gutter');
 const result = document.getElementById('result');
 
-code.value = '';
+const KEY = 'html-ide-code';
+function load() { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } }
+function save() { try { localStorage.setItem(KEY, code.value); } catch (e) {} }
+code.value = load();
 
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -106,7 +109,7 @@ function sync() {
   hl.scrollTop = gutter.scrollTop = code.scrollTop;
   hl.scrollLeft = code.scrollLeft;
 }
-code.addEventListener('input', render);
+code.addEventListener('input', () => { render(); save(); });
 code.addEventListener('scroll', sync);
 code.addEventListener('keydown', e => {
   if (e.key === 'Tab') {
@@ -114,7 +117,7 @@ code.addEventListener('keydown', e => {
     const s = code.selectionStart;
     code.value = code.value.slice(0, s) + '  ' + code.value.slice(code.selectionEnd);
     code.selectionStart = code.selectionEnd = s + 2;
-    render();
+    render(); save();
   }
 });
 
@@ -194,7 +197,7 @@ document.getElementById('pwOk').onclick = tryPw;
 document.getElementById('pwCancel').onclick = () => pw.close();
 pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryPw(); });
 document.getElementById('clear').onclick = () => {
-  if (confirm('Clear all code?')) { code.value = ''; render(); out.srcdoc = ''; result.textContent = 'Press "Check Tags" to check your code.'; }
+  if (confirm('Clear all code?')) { code.value = ''; render(); save(); out.srcdoc = ''; result.textContent = 'Press "Check Tags" to check your code.'; }
 };
 
 render();
