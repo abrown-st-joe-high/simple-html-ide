@@ -6,12 +6,12 @@
 <title>HTML Practice IDE</title>
 <style>
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: "Courier New", Courier, monospace; background: #f4f4f4; color: #222; }
+  body { margin: 0; font-family: "Courier New", Courier, monospace; background: #f4f4f4; color: #222; display: flex; flex-direction: column; height: 100vh; }
   header { padding: 10px 14px; background: #222; color: #fff; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   header h1 { font-size: 16px; margin: 0 auto 0 0; }
   button { font-family: "Courier New", Courier, monospace; font-size: 14px; padding: 6px 12px; cursor: pointer; border: 1px solid #888; background: #fff; border-radius: 3px; }
   button:hover { background: #e8e8e8; }
-  main { display: flex; gap: 10px; padding: 10px; height: calc(100vh - 190px); min-height: 300px; }
+  main { display: flex; gap: 10px; padding: 10px; flex: 1; min-height: 260px; }
   .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .label { font-size: 12px; margin-bottom: 4px; color: #555; }
   .editor { position: relative; flex: 1; background: #fff; border: 1px solid #999; overflow: hidden; }
@@ -29,10 +29,17 @@
   .editor textarea { background: transparent; color: transparent; caret-color: #000; resize: none; outline: none; }
   .editor textarea::selection { background: rgba(60,120,220,.3); }
   iframe { flex: 1; border: 1px solid #999; background: #fff; width: 100%; }
-  #result { margin: 0 10px 10px; padding: 10px; background: #fff; border: 1px solid #999; height: 110px; overflow: auto; font-size: 14px; }
+  #result { margin: 0 10px 10px; padding: 10px; background: #fff; border: 1px solid #999; height: 150px; flex-shrink: 0; overflow: auto; font-size: 14px; }
+  #teacher { display: flex; gap: 14px; padding: 8px 10px; background: #fff8dc; border-bottom: 1px solid #cc9; max-height: 210px; overflow: auto; }
+  #teacher[hidden] { display: none; }
+  .tcol { flex: 1; min-width: 0; }
+  .tcol button { margin: 2px 4px 2px 0; font-size: 12px; padding: 4px 8px; }
+  .tinfo { font-size: 13px; margin-top: 6px; }
+  .tinfo ul { margin: 4px 0 0; padding-left: 20px; }
+  @media (max-width: 700px) { #teacher { flex-direction: column; } }
   .ok { color: #0a7a2f; } .err { color: #b3261e; }
   .t { color: #0b5cad; } .a { color: #9a5b00; } .s { color: #1a7f37; } .c { color: #888; font-style: italic; }
-  @media (max-width: 700px) { main { flex-direction: column; height: auto; } .pane { height: 300px; } }
+  @media (max-width: 700px) { body { height: auto; } main { flex-direction: column; height: auto; } .pane { height: 300px; } }
 </style>
 </head>
 <body>
@@ -40,8 +47,21 @@
   <h1>HTML Practice IDE</h1>
   <button id="check">Check Tags</button>
   <button id="run">Run</button>
+  <button id="teacherBtn">Teacher Mode</button>
   <button id="clear">Clear</button>
 </header>
+<section id="teacher" hidden>
+  <div class="tcol">
+    <div class="label">Commonly necessary pieces (click one to insert it at the cursor)</div>
+    <div id="necList"></div>
+    <div id="necInfo" class="tinfo"></div>
+  </div>
+  <div class="tcol">
+    <div class="label">Student examples with mistakes (click one to load it into the editor)</div>
+    <div id="exList"></div>
+    <div id="exInfo" class="tinfo"></div>
+  </div>
+</section>
 <main>
   <div class="pane">
     <div class="label">Your code (autosaved in this browser)</div>
@@ -57,7 +77,7 @@
   </div>
 </main>
 <dialog id="pw">
-  <p>Enter the password to use Run:</p>
+  <p>Enter the password:</p>
   <input type="password" id="pwInput" autocomplete="off">
   <p id="pwMsg" class="err" style="margin:8px 0 0"></p>
   <p style="margin:12px 0 0"><button id="pwOk">OK</button> <button id="pwCancel">Cancel</button></p>
@@ -133,6 +153,7 @@ function checkTags(src) {
   while ((m = re.exec(src))) {
     if (!m[2]) continue; // comment or doctype
     const name = m[2].toLowerCase();
+    if (name === 'doctype') continue;
     const line = lineAt(m.index);
     if (m[1]) {
       if (VOID.has(name)) { problems.push('Line ' + line + ': <' + name + '> does not use a closing tag.'); continue; }
@@ -164,17 +185,16 @@ function checkTags(src) {
   return problems.sort((a, b) => parseInt(a.slice(5)) - parseInt(b.slice(5)));
 }
 
+function section(title, list) {
+  return '<div><b>' + title + ':</b> ' + (list.length
+    ? '<span class="err">' + list.length + ' problem' + (list.length > 1 ? 's' : '') + '</span><br>' + list.map(esc).join('<br>')
+    : '<span class="ok">OK</span>') + '</div>';
+}
 document.getElementById('check').onclick = () => {
-  const p = checkTags(code.value);
-  if (!code.value.trim()) {
-    result.textContent = 'Nothing to check yet. Type some HTML first.';
-  } else if (!p.length) {
-    result.innerHTML = '<span class="ok">All tags that need a closing tag have one. Nice work!</span>';
-  } else {
-    result.innerHTML = '<span class="err">Found ' + p.length + ' problem' + (p.length > 1 ? 's' : '') + ':</span><br>' +
-      p.map(x => esc(x)).join('<br>');
-  }
+  if (!code.value.trim()) { result.textContent = 'Nothing to check yet. Type some HTML first.'; return; }
+  result.innerHTML = section('Basic structure', checkStructure(code.value)) + section('Tags', checkTags(code.value));
 };
+
 // Password for Run. To change it, replace the text inside atob(...) with
 // your password encoded in base64 (e.g. run btoa('newpassword') in the browser console).
 // Note: this is only a light lock; anyone who views the page source can work it out.
@@ -184,21 +204,208 @@ const pw = document.getElementById('pw');
 const pwInput = document.getElementById('pwInput');
 const pwMsg = document.getElementById('pwMsg');
 function runCode() { out.srcdoc = code.value; }
-document.getElementById('run').onclick = () => {
-  if (unlocked) { runCode(); return; }
+let pending = null;
+function requireUnlock(fn) {
+  if (unlocked) { fn(); return; }
+  pending = fn;
   pwInput.value = ''; pwMsg.textContent = '';
   pw.showModal(); pwInput.focus();
-};
+}
+document.getElementById('run').onclick = () => requireUnlock(runCode);
 function tryPw() {
-  if (pwInput.value === PASS) { unlocked = true; pw.close(); runCode(); }
+  if (pwInput.value === PASS) { unlocked = true; pw.close(); const f = pending; pending = null; if (f) f(); }
   else { pwMsg.textContent = 'Incorrect password.'; pwInput.select(); }
 }
 document.getElementById('pwOk').onclick = tryPw;
-document.getElementById('pwCancel').onclick = () => pw.close();
+document.getElementById('pwCancel').onclick = () => { pending = null; pw.close(); };
 pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryPw(); });
 document.getElementById('clear').onclick = () => {
   if (confirm('Clear all code?')) { code.value = ''; render(); save(); out.srcdoc = ''; result.textContent = 'Press "Check Tags" to check your code.'; }
 };
+
+// ---------- Basic structure checker ----------
+function tokenize(src) {
+  const toks = [];
+  const lineAt = k => src.slice(0, k).split('\n').length;
+  const re = /<!--[\s\S]*?-->|<!doctype[^>]*>|<(\/?)([a-zA-Z][\w:-]*)((?:"[^"]*"|'[^']*'|[^'">])*)>/gi;
+  let last = 0, m;
+  const pushText = (a, b) => {
+    const t = src.slice(a, b);
+    if (t.trim()) toks.push({ type: 'text', text: t.trim(), line: lineAt(a + t.search(/\S/)) });
+  };
+  while ((m = re.exec(src))) {
+    pushText(last, m.index);
+    last = re.lastIndex;
+    if (m[0].startsWith('<!--')) continue;
+    const line = lineAt(m.index);
+    if (!m[2]) { toks.push({ type: 'doctype', line }); continue; }
+    const name = m[2].toLowerCase();
+    toks.push({ type: m[1] ? 'close' : 'open', name, line });
+    if (!m[1] && (name === 'script' || name === 'style')) {
+      const f = new RegExp('</' + name + '\\s*>', 'i').exec(src.slice(last));
+      if (f) { last = last + f.index; re.lastIndex = last; }
+    }
+  }
+  pushText(last, src.length);
+  return toks;
+}
+
+function checkStructure(src) {
+  const probs = [];
+  const add = (line, msg) => probs.push({ line, msg });
+  const lineAt = k => src.slice(0, k).split('\n').length;
+
+  // 1. DOCTYPE must be first and exactly <!DOCTYPE html>
+  const lead = /^(?:\s|<!--[\s\S]*?-->)*/.exec(src)[0].length;
+  const rest = src.slice(lead);
+  const first = /^[^>]*>?/.exec(rest)[0];
+  let work = src;
+  const blank = () => { work = src.slice(0, lead) + first.replace(/[^\n]/g, ' ') + rest.slice(first.length); };
+  if (/^<!doctype\s+html\s*>$/i.test(first)) {
+    blank();
+  } else if (/doctype/i.test(first) || /^<[^a-zA-Z\/]/.test(first)) {
+    add(lineAt(lead), 'The DOCTYPE is not correct. It should be exactly <!DOCTYPE html> but this has "' + first.trim().slice(0, 40) + '".');
+    blank();
+  } else {
+    add(null, 'Missing <!DOCTYPE html> at the very top of the file.');
+  }
+
+  // 2. Walk the page and make sure everything is in the right place
+  const toks = tokenize(work);
+  const hasHtml = toks.some(t => t.type === 'open' && t.name === 'html');
+  let state = hasHtml ? 'pre' : 'html';
+  const seen = { head: 0, body: 0, title: 0 };
+  let inTitle = false, titleText = false, htmlClosed = false;
+  const HEAD_OK = new Set(['title', 'meta', 'link', 'style', 'script', 'base', 'noscript']);
+  const STRUCT = new Set(['html', 'head', 'body']);
+  const stray = []; // elements already reported as misplaced, so their text/closing tag are not reported again
+  const flag = (t, msg) => { add(t.line, msg); if (t.type === 'open' && !VOID.has(t.name)) stray.push(t.name); };
+  const desc = t => t.type === 'text'
+    ? 'The text "' + t.text.slice(0, 20) + (t.text.length > 20 ? '...' : '') + '"'
+    : '<' + (t.type === 'close' ? '/' : '') + t.name + '>';
+
+  for (const t of toks) {
+    if (t.type === 'doctype') { add(t.line, 'A <!DOCTYPE> must be the very first thing in the file, and only appear once.'); continue; }
+    const isOpen = t.type === 'open', isClose = t.type === 'close', n = t.name;
+    if (stray.length && !STRUCT.has(n) && state !== 'body') {
+      if (isOpen && !VOID.has(n)) stray.push(n);
+      else if (isClose) { const k = stray.lastIndexOf(n); if (k !== -1) stray.length = k; }
+      continue;
+    }
+    if (STRUCT.has(n)) stray.length = 0;
+    if (state === 'pre') {
+      if (isOpen && n === 'html') state = 'html';
+      else flag(t, desc(t) + ' is before <html>. Everything must go inside <html> ... </html>.');
+    } else if (state === 'html') {
+      if (isOpen && n === 'head') {
+        if (seen.body) add(t.line, '<head> must come before <body>.');
+        else if (seen.head) add(t.line, 'There is more than one <head>.');
+        seen.head++; state = 'head';
+      } else if (isOpen && n === 'body') {
+        if (seen.body) add(t.line, 'There is more than one <body>.');
+        seen.body++; state = 'body';
+      } else if (isClose && n === 'html') { htmlClosed = true; state = 'post'; }
+      else if (isOpen && n === 'html') add(t.line, 'There is more than one <html>.');
+      else if (isClose && (n === 'head' || n === 'body')) add(t.line, desc(t) + ' has no matching opening tag.');
+      else flag(t, desc(t) + ' is inside <html> but not inside <head> or <body>. ' +
+        (t.type === 'text' ? 'Text belongs inside <body>.' : (HEAD_OK.has(n) ? 'It belongs inside <head>.' : 'It belongs inside <body>.')));
+    } else if (state === 'head') {
+      if (isClose && n === 'head') state = 'html';
+      else if (isOpen && n === 'body') { seen.body++; state = 'body'; }
+      else if (isClose && n === 'html') { htmlClosed = true; state = 'post'; }
+      else if (isOpen && n === 'title') { seen.title++; if (seen.title > 1) add(t.line, 'There is more than one <title>.'); inTitle = true; }
+      else if (isClose && n === 'title') inTitle = false;
+      else if (t.type === 'text') {
+        if (inTitle) titleText = true;
+        else add(t.line, 'Text is inside <head> but not inside <title>. Visible text belongs in <body>.');
+      }
+      else if (isOpen && n !== 'html' && n !== 'head' && !HEAD_OK.has(n)) flag(t, desc(t) + ' is inside <head>. It belongs inside <body>.');
+    } else if (state === 'body') {
+      if (isClose && n === 'body') state = 'html';
+      else if (isClose && n === 'html') { htmlClosed = true; state = 'post'; }
+      else if (isOpen && (n === 'html' || n === 'head' || n === 'body')) add(t.line, desc(t) + ' should not be inside <body>.');
+    } else {
+      flag(t, desc(t) + ' is after </html>. Nothing may come after </html>.');
+    }
+  }
+
+  // 3. Required pieces
+  if (!hasHtml) add(null, 'Missing <html> opening tag. All of your code must be wrapped in <html> ... </html>.');
+  if (!htmlClosed) add(null, 'Missing </html> closing tag at the very end.');
+  if (!seen.head) add(null, 'Missing <head> section (it holds the <title>).');
+  else if (!seen.title) add(null, 'Missing <title> inside <head>.');
+  else if (!titleText) add(null, 'The <title> is empty. Give your page a title.');
+  if (!seen.body) add(null, 'Missing <body> section.');
+
+  probs.sort((a, b) => (a.line || 1e9) - (b.line || 1e9));
+  return probs.map(p => (p.line ? 'Line ' + p.line + ': ' : '') + p.msg);
+}
+
+// ---------- Teacher mode ----------
+const NEC = [
+  { name: 'Full starter page', why: 'All the required pieces together: DOCTYPE, html, head with a title, and body.',
+    code: '<!DOCTYPE html>\n<html>\n  <head>\n    <title>Page Title</title>\n  </head>\n  <body>\n    \n  </body>\n</html>\n' },
+  { name: '<!DOCTYPE html>', why: 'Must be the very first line, spelled exactly like this. It tells the browser this is an HTML5 page.', code: '<!DOCTYPE html>\n' },
+  { name: '<html> wrapper', why: '<html> and </html> wrap everything except the DOCTYPE. Nothing goes outside them.', code: '<html>\n  \n</html>\n' },
+  { name: '<head> + <title>', why: 'The head sits first inside <html> and holds the <title>. Visible page content does not go here.', code: '<head>\n  <title>Page Title</title>\n</head>\n' },
+  { name: '<body>', why: 'Comes after </head>. All visible content (headings, text, images) goes inside it.', code: '<body>\n  \n</body>\n' },
+  { name: '<meta charset>', why: 'Goes inside <head>. Makes special characters display correctly. It has no closing tag.', code: '<meta charset="UTF-8">\n' },
+  { name: 'Heading', why: 'Headings need a closing tag: <h1> ... </h1>.', code: '<h1>Heading</h1>\n' },
+  { name: 'Paragraph', why: 'Paragraphs need a closing </p>.', code: '<p>Text here.</p>\n' },
+  { name: 'Image', why: 'A void tag: it has no closing tag. Always include alt text.', code: '<img src="" alt="">\n' },
+  { name: 'Link', why: 'Links need a closing </a>.', code: '<a href="">Link text</a>\n' },
+  { name: 'List', why: 'Each <li> goes inside a <ul> or <ol>, and every one needs a closing tag.', code: '<ul>\n  <li>Item</li>\n</ul>\n' }
+];
+
+const EX = [
+  { title: 'Typo + no title',
+    code: '<!DOCTYPE hgml>\n<html>\n  <head>\n  </head>\n  <body>\n    <h1>My Page</h1>\n    <p>Hello there</p>\n  </body>\n</html>\n',
+    mistakes: ['DOCTYPE is misspelled (hgml instead of html)', 'The <head> has no <title>'] },
+  { title: 'Stuff outside body',
+    code: '<!DOCTYPE html>\n<html>\n  <head>\n    <title>My Page</title>\n  </head>\n  <h1>Welcome</h1>\n  <body>\n    <p>First paragraph\n    <ul>\n      <li>One</li>\n    </ul>\n  </body>\n</html>\n<p>Thanks for reading</p>\n',
+    mistakes: ['<h1> sits between </head> and <body>', '<p> is never closed', 'A <p> comes after </html>'] },
+  { title: 'No html tags',
+    code: '<!DOCTYPE html>\n<head>\n  <title>Pets</title>\n  <h1>My Pets</h1>\n  <p>I have a dog.</p>\n</head>\n<body>\n  <img src="dog.jpg">\n</body>\n',
+    mistakes: ['No <html> or </html> around the page', 'The <h1> and <p> are inside <head> instead of <body>'] }
+];
+
+function insertAtCursor(text) {
+  const s = code.selectionStart, e = code.selectionEnd;
+  code.value = code.value.slice(0, s) + text + code.value.slice(e);
+  code.selectionStart = code.selectionEnd = s + text.length;
+  render(); save(); code.focus();
+}
+
+const teacher = document.getElementById('teacher');
+const tBtn = document.getElementById('teacherBtn');
+tBtn.onclick = () => {
+  if (!teacher.hidden) { teacher.hidden = true; tBtn.textContent = 'Teacher Mode'; return; }
+  requireUnlock(() => { teacher.hidden = false; tBtn.textContent = 'Hide Teacher Mode'; });
+};
+
+const necInfo = document.getElementById('necInfo');
+NEC.forEach(n => {
+  const b = document.createElement('button');
+  b.textContent = n.name;
+  b.onclick = () => { insertAtCursor(n.code); necInfo.textContent = n.why; };
+  document.getElementById('necList').appendChild(b);
+});
+
+const exInfo = document.getElementById('exInfo');
+EX.forEach((ex, i) => {
+  const b = document.createElement('button');
+  b.textContent = 'Example ' + (i + 1) + ': ' + ex.title;
+  b.onclick = () => {
+    if (code.value.trim() && code.value !== ex.code &&
+        !confirm('Load this example? It replaces the code in the editor (and the autosaved copy).')) return;
+    code.value = ex.code; render(); save();
+    exInfo.textContent = 'Mistakes planted in this example:';
+    const ul = document.createElement('ul');
+    ex.mistakes.forEach(m => { const li = document.createElement('li'); li.textContent = m; ul.appendChild(li); });
+    exInfo.appendChild(ul);
+  };
+  document.getElementById('exList').appendChild(b);
+});
 
 render();
 </script>
